@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Subir Imagen</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+<body>
+  <%- include('header') %>
+  <div class="container mt-5">
+    <h2 class="mb-4">Subir Imagen</h2>
+    <form id="formSubirImagen" action="" method="POST" enctype="multipart/form-data">
+      <div class="mb-3">
+        <label for="categoria" class="form-label">Categoría</label>
+        <select class="form-select" id="categoria" name="categoria_id" required>
+          <option value="">Selecciona una categoría</option>
+          <% categorias.forEach(function(cat) { %>
+            <option value="<%= cat.id %>"><%= cat.nombre %></option>
+          <% }); %>
+        </select>
+      </div>
+      <div class="mb-3">
+        <label for="producto" class="form-label">Producto</label>
+        <select class="form-select" id="producto" name="producto_id" required>
+          <option value="">Selecciona un producto</option>
+          <% productos.forEach(function(prod) { %>
+            <option value="<%= prod.id %>" data-categoria="<%= prod.categoria_id %>"><%= prod.nombre %></option>
+          <% }); %>
+        </select>
+      </div>
+      <div class="mb-3">
+        <label for="imagenes" class="form-label">Selecciona imágenes</label>
+        <input type="file" class="form-control" id="imagenes" name="imagenes" multiple required>
+      </div>
+      <button type="submit" class="btn btn-primary">Subir Imágenes</button>
+    </form>
+
+    <script>
+      const categoriaSelect = document.getElementById('categoria');
+      const productoSelect = document.getElementById('producto');
+      const form = document.getElementById('formSubirImagen');
+
+      categoriaSelect.addEventListener('change', () => {
+        const categoriaId = categoriaSelect.value;
+        const options = productoSelect.options;
+
+        for (let i = 0; i < options.length; i++) {
+          const option = options[i];
+          if (!option.value) continue;
+          option.style.display = option.dataset.categoria === categoriaId ? '' : 'none';
+        }
+        productoSelect.value = '';
+      });
+
+      form.addEventListener('submit', (e) => {
+        e.preventDefault();
+        if (!productoSelect.value) {
+          alert('Por favor selecciona un producto');
+          return;
+        }
+        form.action = '/imagenes/producto/' + productoSelect.value;
+        form.submit();
+      });
+    </script>
+  </div>
+</body>
+</html>
