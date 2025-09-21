@@ -18,9 +18,12 @@ router.post('/', async (req, res) => {
 
   try {
     // Verificar si ya existe el usuario
-    const [results] = await pool.query('SELECT * FROM usuarios WHERE usuario = ?', [usuario]);
+    const [existingUsers] = await pool.query(
+      'SELECT id FROM usuarios WHERE usuario = ?',
+      [usuario]
+    );
 
-    if (results.length > 0) {
+    if (existingUsers.length > 0) {
       return res.render('registrar', { error: 'El usuario ya existe' });
     }
 
@@ -28,15 +31,33 @@ router.post('/', async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, 10);
 
     // Insertar nuevo usuario
-    await pool.query('INSERT INTO usuarios (usuario, password) VALUES (?, ?)', [usuario, hashedPassword]);
+    const [insertResult] = await pool.query(
+      'INSERT INTO usuarios (usuario, password) VALUES (?, ?)',
+      [usuario, hashedPassword]
+    );
 
-    res.redirect('/login');
+    // Confirmar que se insertó
+    if (insertResult.affectedRows === 1) {
+      return res.redirect('/login');
+    } else {
+      throw new Error('No se pudo crear el usuario');
+    }
 
   } catch (error) {
-    console.error(error);
-    res.status(500).render('registrar', { error: 'Error interno del servidor' });
+    console.error('Error en registro:', error);
+
+    // Mostrar error exacto en Render para depuración
+    let errorMsg = 'Error interno del servidor';
+    if (error.code === 'ER_DUP_ENTRY') {
+      errorMsg = 'El usuario ya existe';
+    } else if (error.sqlMessage) {
+      errorMsg = error.sqlMessage;
+    }
+
+    return res.status(500).render('registrar', { error: errorMsg });
   }
 });
 
 module.exports = router;
+
 
