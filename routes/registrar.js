@@ -3,16 +3,16 @@ const router = express.Router();
 const pool = require('../db');
 const bcrypt = require('bcryptjs');
 
-// Función para reintentar consultas por si la DB no responde de inmediato
+// Función para consultas seguras con reintento
 async function safeQuery(query, params = [], retries = 3) {
   for (let i = 0; i < retries; i++) {
     try {
-      const [rows] = await pool.query(query, params);
+      const [rows] = await pool.promise().query(query, params);
       return rows;
     } catch (err) {
-      console.error(`Query attempt ${i + 1} failed:`, err.code, err.sqlMessage);
-      if (i === retries - 1) throw err; // lanzar error después de últimos intentos
-      await new Promise(res => setTimeout(res, 500)); // esperar medio segundo antes de reintentar
+      console.error(`Intento ${i + 1} fallido:`, err.code, err.sqlMessage);
+      if (i === retries - 1) throw err;
+      await new Promise(res => setTimeout(res, 500));
     }
   }
 }
@@ -22,7 +22,7 @@ router.get('/', (req, res) => {
   res.render('registrar', { error: "" });
 });
 
-// Procesar registro (POST /registrar)
+// Procesar registro
 router.post('/', async (req, res) => {
   const { usuario, password } = req.body;
 
@@ -41,7 +41,10 @@ router.post('/', async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, 10);
 
     // Insertar nuevo usuario
-    const result = await safeQuery('INSERT INTO usuarios (usuario, password) VALUES (?, ?)', [usuario, hashedPassword]);
+    const result = await safeQuery(
+      'INSERT INTO usuarios (usuario, password) VALUES (?, ?)',
+      [usuario, hashedPassword]
+    );
 
     if (result.affectedRows === 1) {
       return res.redirect('/login');
@@ -50,13 +53,15 @@ router.post('/', async (req, res) => {
     }
 
   } catch (error) {
-    console.error('Registro error:', error.code, error.sqlMessage);
+    console.error('Error en /registrar:', error.code, error.sqlMessage);
 
     let mensajeError = 'Error interno del servidor';
     if (error.code === 'ER_DUP_ENTRY') {
       mensajeError = 'El usuario ya existe';
     } else if (error.code === 'ECONNREFUSED') {
       mensajeError = 'No se pudo conectar a la base de datos, intenta más tarde';
+    } else if (error.code === 'ER_DATA_TOO_LONG') {
+      mensajeError = 'El usuario o la contraseña son demasiado largos';
     }
 
     return res.status(500).render('registrar', { error: mensajeError });
