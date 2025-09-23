@@ -3,6 +3,7 @@ const router = express.Router();
 const pool = require('../db');
 const multer = require('multer');
 const path = require('path');
+const fs = require('fs');
 
 // ---------------------
 // Middleware de sesión
@@ -24,9 +25,9 @@ const upload = multer({ storage });
 // ---------------------
 // Listar productos con filtro opcional por categoría
 // ---------------------
-router.get('/productos', async (req, res) => {
+router.get('/', async (req, res) => {
   try {
-    const { categoria_id } = req.query; // leer categoría seleccionada
+    const { categoria_id } = req.query;
 
     let query = `
       SELECT p.id, p.nombre, p.precio, p.categoria_id,
@@ -46,11 +47,11 @@ router.get('/productos', async (req, res) => {
     const [productos] = await pool.query(query, params);
     const [categorias] = await pool.query('SELECT * FROM categorias');
 
-    res.render('productos', {
-      productos,
-      categorias,
-      categoria_id: categoria_id || '',
-      session: req.session
+    res.render('productos', { 
+      productos, 
+      categorias, 
+      categoria_id: categoria_id || '', 
+      session: req.session 
     });
   } catch (err) {
     console.error(err);
@@ -61,35 +62,34 @@ router.get('/productos', async (req, res) => {
 // ---------------------
 // Mostrar formulario nuevo
 // ---------------------
-router.get('/nuevo', requireAuth, (req, res) => {
-  const categoria_id = req.query.categoria_id || '';
-  res.render('producto_form', { producto: { categoria_id }, accion: 'Crear', session: req.session });
+router.get('/nuevo', requireAuth, async (req, res) => {
+  try {
+    const [categorias] = await pool.query('SELECT * FROM categorias');
+    res.render('producto_form', { producto: {}, categorias, accion: 'Crear', session: req.session });
+  } catch (err) {
+    console.error(err);
+    res.render('error', { mensaje: 'Error al cargar formulario' });
+  }
 });
 
 // ---------------------
 // Crear producto con imagen
 // ---------------------
-router.post('/', requireAuth, upload.single('imagen'), async (req, res) => {
+router.post('/nuevo', requireAuth, upload.single('imagen'), async (req, res) => {
   try {
-    let { nombre, precio, categoria_id } = req.body;
-    if (!categoria_id || categoria_id === '') categoria_id = null;
+    const { nombre, precio, categoria_id } = req.body;
 
     const [result] = await pool.query(
       'INSERT INTO productos (nombre, precio, categoria_id) VALUES (?, ?, ?)',
-      [nombre, precio, categoria_id]
+      [nombre, precio, categoria_id || null]
     );
-
-    const productoId = result.insertId;
 
     if (req.file) {
       const imageUrl = '/uploads/' + req.file.filename;
-      await pool.query(
-        'INSERT INTO imagenes_productos (producto_id, url) VALUES (?, ?)',
-        [productoId, imageUrl]
-      );
+      await pool.query('INSERT INTO imagenes_productos (producto_id, url) VALUES (?, ?)', [result.insertId, imageUrl]);
     }
 
-    res.redirect(categoria_id ? `/productos?categoria_id=${categoria_id}` : '/productos');
+    res.redirect('/productos');
   } catch (err) {
     console.error(err);
     res.render('error', { mensaje: 'Error al crear producto: ' + err.message });
@@ -109,15 +109,10 @@ router.get('/:id', async (req, res) => {
        WHERE p.id = ?`, [id]
     );
 
-    if (productos.length === 0) {
-      return res.render('error', { mensaje: 'Producto no encontrado' });
-    }
+    if (productos.length === 0) return res.render('error', { mensaje: 'Producto no encontrado' });
 
     const producto = productos[0];
-    const [imagenes] = await pool.query(
-      'SELECT * FROM imagenes_productos WHERE producto_id = ?',
-      [id]
-    );
+    const [imagenes] = await pool.query('SELECT * FROM imagenes_productos WHERE producto_id = ?', [id]);
 
     res.render('producto_detalle', {
       producto,
@@ -127,7 +122,7 @@ router.get('/:id', async (req, res) => {
     });
   } catch (err) {
     console.error(err);
-    res.render('error', { mensaje: 'Error al obtener el producto' });
+    res.render('error', { mensaje: 'Error al obtener producto' });
   }
 });
 
@@ -137,12 +132,15 @@ router.get('/:id', async (req, res) => {
 router.get('/editar/:id', requireAuth, async (req, res) => {
   const { id } = req.params;
   try {
-    const [results] = await pool.query('SELECT * FROM productos WHERE id = ?', [id]);
-    if (results.length === 0) return res.render('error', { mensaje: 'Producto no encontrado' });
-    res.render('producto_form', { producto: results[0], accion: 'Editar', session: req.session });
+    const [productos] = await pool.query('SELECT * FROM productos WHERE id = ?', [id]);
+    const [categorias] = await pool.query('SELECT * FROM categorias');
+
+    if (productos.length === 0) return res.render('error', { mensaje: 'Producto no encontrado' });
+
+    res.render('producto_form', { producto: productos[0], categorias, accion: 'Editar', session: req.session });
   } catch (err) {
     console.error(err);
-    res.render('error', { mensaje: 'Error al obtener producto' });
+    res.render('error', { mensaje: 'Error al cargar formulario' });
   }
 });
 
@@ -151,16 +149,17 @@ router.get('/editar/:id', requireAuth, async (req, res) => {
 // ---------------------
 router.post('/editar/:id', requireAuth, upload.single('imagen'), async (req, res) => {
   const { id } = req.params;
-  const { nombre, precio } = req.body;
+  const { nombre, precio, categoria_id } = req.body;
+
   try {
-    await pool.query('UPDATE productos SET nombre = ?, precio = ? WHERE id = ?', [nombre, precio, id]);
+    await pool.query('UPDATE productos SET nombre = ?, precio = ?, categoria_id = ? WHERE id = ?', [nombre, precio, categoria_id || null, id]);
 
     if (req.file) {
       const imageUrl = '/uploads/' + req.file.filename;
       await pool.query('INSERT INTO imagenes_productos (producto_id, url) VALUES (?, ?)', [id, imageUrl]);
     }
 
-    res.redirect('/productos/' + id);
+    res.redirect(`/productos/${id}`);
   } catch (err) {
     console.error(err);
     res.render('error', { mensaje: 'Error al actualizar producto' });
@@ -173,8 +172,16 @@ router.post('/editar/:id', requireAuth, upload.single('imagen'), async (req, res
 router.post('/eliminar/:id', requireAuth, async (req, res) => {
   const { id } = req.params;
   try {
-    await pool.query('DELETE FROM productos WHERE id = ?', [id]);
+    // Borrar imágenes físicas
+    const [imagenes] = await pool.query('SELECT * FROM imagenes_productos WHERE producto_id = ?', [id]);
+    for (let img of imagenes) {
+      const imagePath = path.join('public', img.url);
+      if (fs.existsSync(imagePath)) fs.unlinkSync(imagePath);
+    }
+
     await pool.query('DELETE FROM imagenes_productos WHERE producto_id = ?', [id]);
+    await pool.query('DELETE FROM productos WHERE id = ?', [id]);
+
     res.redirect('/productos');
   } catch (err) {
     console.error(err);
