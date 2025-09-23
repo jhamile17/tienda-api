@@ -1,8 +1,12 @@
 const express = require('express');
 const router = express.Router();
 const pool = require('../db');
+const multer = require('multer');
+const path = require('path');
 
-// Middleware para proteger rutas (solo usuarios autenticados)
+// ---------------------
+// Middleware de sesión
+// ---------------------
 function requireAuth(req, res, next) {
 	if (req.session && req.session.user) {
 		return next();
@@ -10,7 +14,23 @@ function requireAuth(req, res, next) {
 	res.status(403).render('error', { mensaje: 'Acceso denegado. Inicia sesión.' });
 }
 
+// ---------------------
+// Configuración Multer
+// ---------------------
+const storage = multer.diskStorage({
+	destination: (req, file, cb) => {
+		cb(null, 'public/uploads'); // Carpeta donde se guardan las imágenes
+	},
+	filename: (req, file, cb) => {
+		cb(null, Date.now() + path.extname(file.originalname)); // Nombre único
+	}
+});
+
+const upload = multer({ storage });
+
+// ---------------------
 // Listar productos
+// ---------------------
 router.get('/', async (req, res) => {
 	try {
 		const [results] = await pool.query(
@@ -25,24 +45,38 @@ router.get('/', async (req, res) => {
 	}
 });
 
-// Mostrar formulario para crear producto (protegido)
+// ---------------------
+// Mostrar formulario nuevo
+// ---------------------
 router.get('/nuevo', requireAuth, (req, res) => {
 	const categoria_id = req.query.categoria_id || '';
 	res.render('producto_form', { producto: { categoria_id }, accion: 'Crear', session: req.session });
 });
 
-// Crear producto (protegido)
-router.post('/', requireAuth, async (req, res) => {
+// ---------------------
+// Crear producto con imagen
+// ---------------------
+router.post('/', requireAuth, upload.single('imagen'), async (req, res) => {
 	try {
 		let { nombre, precio, categoria_id } = req.body;
 		if (!categoria_id || categoria_id === '') categoria_id = null;
 
-		const query = categoria_id
-			? 'INSERT INTO productos (nombre, precio, categoria_id) VALUES (?, ?, ?)'
-			: 'INSERT INTO productos (nombre, precio, categoria_id) VALUES (?, NULL)';
-		const params = categoria_id ? [nombre, precio, categoria_id] : [nombre, precio];
+		// Insertar producto
+		const [result] = await pool.query(
+			'INSERT INTO productos (nombre, precio, categoria_id) VALUES (?, ?, ?)',
+			[nombre, precio, categoria_id]
+		);
 
-		await pool.query(query, params);
+		const productoId = result.insertId;
+
+		// Guardar imagen en tabla imagenes_productos si existe
+		if (req.file) {
+			const imageUrl = '/uploads/' + req.file.filename;
+			await pool.query(
+				'INSERT INTO imagenes_productos (producto_id, url) VALUES (?, ?)',
+				[productoId, imageUrl]
+			);
+		}
 
 		if (categoria_id) {
 			res.redirect(`/categorias/${categoria_id}/productos`);
@@ -55,7 +89,9 @@ router.post('/', requireAuth, async (req, res) => {
 	}
 });
 
+// ---------------------
 // Ver detalle de producto
+// ---------------------
 router.get('/:id', async (req, res) => {
 	const { id } = req.params;
 	try {
@@ -88,7 +124,9 @@ router.get('/:id', async (req, res) => {
 	}
 });
 
-// Mostrar formulario para editar producto (protegido)
+// ---------------------
+// Mostrar formulario editar
+// ---------------------
 router.get('/editar/:id', requireAuth, async (req, res) => {
 	const { id } = req.params;
 	try {
@@ -103,12 +141,22 @@ router.get('/editar/:id', requireAuth, async (req, res) => {
 	}
 });
 
-// Actualizar producto (protegido)
-router.post('/editar/:id', requireAuth, async (req, res) => {
+// ---------------------
+// Actualizar producto (opcionalmente imagen)
+// ---------------------
+router.post('/editar/:id', requireAuth, upload.single('imagen'), async (req, res) => {
 	const { id } = req.params;
 	const { nombre, precio } = req.body;
 	try {
+		// Actualizar datos básicos
 		await pool.query('UPDATE productos SET nombre = ?, precio = ? WHERE id = ?', [nombre, precio, id]);
+
+		// Si hay nueva imagen la guardamos
+		if (req.file) {
+			const imageUrl = '/uploads/' + req.file.filename;
+			await pool.query('INSERT INTO imagenes_productos (producto_id, url) VALUES (?, ?)', [id, imageUrl]);
+		}
+
 		res.redirect('/productos');
 	} catch (err) {
 		console.error(err);
@@ -116,11 +164,14 @@ router.post('/editar/:id', requireAuth, async (req, res) => {
 	}
 });
 
-// Eliminar producto (protegido)
+// ---------------------
+// Eliminar producto
+// ---------------------
 router.post('/eliminar/:id', requireAuth, async (req, res) => {
 	const { id } = req.params;
 	try {
 		await pool.query('DELETE FROM productos WHERE id = ?', [id]);
+		await pool.query('DELETE FROM imagenes_productos WHERE producto_id = ?', [id]);
 		res.redirect('/productos');
 	} catch (err) {
 		console.error(err);
@@ -129,4 +180,3 @@ router.post('/eliminar/:id', requireAuth, async (req, res) => {
 });
 
 module.exports = router;
-
