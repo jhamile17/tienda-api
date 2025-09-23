@@ -28,20 +28,31 @@ const storage = multer.diskStorage({
 const upload = multer({ storage });
 
 // ---------------------
-// Listar productos (con imagen principal)
+// Listar productos (filtrados por categoría predeterminada)
 // ---------------------
 router.get('/', async (req, res) => {
   try {
-    const [results] = await pool.query(`
+    const categoria_predeterminada = 1; // Cambia este ID según la categoría que quieras mostrar primero
+
+    const query = `
       SELECT p.id, p.nombre, p.precio, p.categoria_id,
              ip.url AS imagen_url
       FROM productos p
       LEFT JOIN imagenes_productos ip 
         ON p.id = ip.producto_id
+      WHERE p.categoria_id = ?
       GROUP BY p.id
-    `);
+    `;
 
-    res.render('productos', { productos: results, session: req.session });
+    const [productos] = await pool.query(query, [categoria_predeterminada]);
+    const [categorias] = await pool.query('SELECT * FROM categorias');
+
+    res.render('productos', {
+      productos,
+      categorias,
+      categoria_id: categoria_predeterminada,
+      session: req.session
+    });
   } catch (err) {
     console.error(err);
     res.render('error', { mensaje: 'Error al obtener productos' });
@@ -64,7 +75,6 @@ router.post('/', requireAuth, upload.single('imagen'), async (req, res) => {
     let { nombre, precio, categoria_id } = req.body;
     if (!categoria_id || categoria_id === '') categoria_id = null;
 
-    // Insertar producto
     const [result] = await pool.query(
       'INSERT INTO productos (nombre, precio, categoria_id) VALUES (?, ?, ?)',
       [nombre, precio, categoria_id]
@@ -72,7 +82,6 @@ router.post('/', requireAuth, upload.single('imagen'), async (req, res) => {
 
     const productoId = result.insertId;
 
-    // Guardar imagen si existe
     if (req.file) {
       const imageUrl = '/uploads/' + req.file.filename;
       await pool.query(
@@ -81,11 +90,7 @@ router.post('/', requireAuth, upload.single('imagen'), async (req, res) => {
       );
     }
 
-    if (categoria_id) {
-      res.redirect(`/categorias/${categoria_id}/productos`);
-    } else {
-      res.redirect('/productos');
-    }
+    res.redirect(categoria_id ? `/categorias/${categoria_id}/productos` : '/productos');
   } catch (err) {
     console.error(err);
     res.render('error', { mensaje: 'Error al crear producto: ' + err.message });
@@ -102,10 +107,11 @@ router.get('/:id', async (req, res) => {
       `SELECT p.*, c.nombre as categoria_nombre 
        FROM productos p 
        LEFT JOIN categorias c ON p.categoria_id = c.id 
-       WHERE p.id = ?`, [id]
+       WHERE p.id = ?`,
+      [id]
     );
 
-    if (productos.length === 0) {
+    if (!productos.length) {
       return res.render('error', { mensaje: 'Producto no encontrado' });
     }
 
@@ -134,7 +140,7 @@ router.get('/editar/:id', requireAuth, async (req, res) => {
   const { id } = req.params;
   try {
     const [results] = await pool.query('SELECT * FROM productos WHERE id = ?', [id]);
-    if (results.length === 0) {
+    if (!results.length) {
       return res.render('error', { mensaje: 'Producto no encontrado' });
     }
     res.render('producto_form', { producto: results[0], accion: 'Editar', session: req.session });
@@ -158,7 +164,7 @@ router.post('/editar/:id', requireAuth, upload.single('imagen'), async (req, res
       await pool.query('INSERT INTO imagenes_productos (producto_id, url) VALUES (?, ?)', [id, imageUrl]);
     }
 
-    res.redirect('/productos/' + id); // redirige al detalle
+    res.redirect('/productos/' + id);
   } catch (err) {
     console.error(err);
     res.render('error', { mensaje: 'Error al actualizar producto' });
@@ -179,42 +185,5 @@ router.post('/eliminar/:id', requireAuth, async (req, res) => {
     res.render('error', { mensaje: 'Error al eliminar producto' });
   }
 });
-// ---------------------
-// Listar productos (filtrados por categoría predeterminada)
-// ---------------------
-router.get('/', async (req, res) => {
-  try {
-    // Puedes definir aquí la categoría predeterminada
-    // Por ejemplo, la categoría con id = 1
-    const categoria_predeterminada = 1;
-
-    let query = `
-      SELECT p.id, p.nombre, p.precio, p.categoria_id,
-             ip.url AS imagen_url
-      FROM productos p
-      LEFT JOIN imagenes_productos ip 
-        ON p.id = ip.producto_id
-      WHERE p.categoria_id = ?
-      GROUP BY p.id
-    `;
-    
-    const [results] = await pool.query(query, [categoria_predeterminada]);
-
-    // Obtener todas las categorías para mostrar en el header o selector
-    const [categorias] = await pool.query('SELECT * FROM categorias');
-
-    res.render('productos', { 
-      productos: results, 
-      categorias, 
-      categoria_id: categoria_predeterminada, 
-      session: req.session 
-    });
-  } catch (err) {
-    console.error(err);
-    res.render('error', { mensaje: 'Error al obtener productos' });
-  }
-});
-
 
 module.exports = router;
-
