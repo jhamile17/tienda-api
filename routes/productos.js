@@ -8,9 +8,7 @@ const path = require('path');
 // Middleware de sesión
 // ---------------------
 function requireAuth(req, res, next) {
-  if (req.session && req.session.user) {
-    return next();
-  }
+  if (req.session && req.session.user) return next();
   res.status(403).render('error', { mensaje: 'Acceso denegado. Inicia sesión.' });
 }
 
@@ -18,39 +16,40 @@ function requireAuth(req, res, next) {
 // Configuración Multer
 // ---------------------
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, 'public/uploads'); // Carpeta donde se guardan las imágenes
-  },
-  filename: (req, file, cb) => {
-    cb(null, Date.now() + path.extname(file.originalname)); // Nombre único
-  }
+  destination: (req, file, cb) => cb(null, 'public/uploads'),
+  filename: (req, file, cb) => cb(null, Date.now() + path.extname(file.originalname))
 });
 const upload = multer({ storage });
 
 // ---------------------
-// Listar productos (filtrados por categoría predeterminada)
+// Listar productos con filtro opcional por categoría
 // ---------------------
 router.get('/', async (req, res) => {
   try {
-    const categoria_predeterminada = 1; // Cambia este ID según la categoría que quieras mostrar primero
+    const { categoria_id } = req.query; // leer categoría seleccionada
 
-    const query = `
+    let query = `
       SELECT p.id, p.nombre, p.precio, p.categoria_id,
              ip.url AS imagen_url
       FROM productos p
-      LEFT JOIN imagenes_productos ip 
-        ON p.id = ip.producto_id
-      WHERE p.categoria_id = ?
-      GROUP BY p.id
+      LEFT JOIN imagenes_productos ip ON p.id = ip.producto_id
     `;
+    const params = [];
 
-    const [productos] = await pool.query(query, [categoria_predeterminada]);
+    if (categoria_id) {
+      query += ' WHERE p.categoria_id = ?';
+      params.push(categoria_id);
+    }
+
+    query += ' GROUP BY p.id';
+
+    const [productos] = await pool.query(query, params);
     const [categorias] = await pool.query('SELECT * FROM categorias');
 
     res.render('productos', {
       productos,
       categorias,
-      categoria_id: categoria_predeterminada,
+      categoria_id: categoria_id || '',
       session: req.session
     });
   } catch (err) {
@@ -90,7 +89,7 @@ router.post('/', requireAuth, upload.single('imagen'), async (req, res) => {
       );
     }
 
-    res.redirect(categoria_id ? `/categorias/${categoria_id}/productos` : '/productos');
+    res.redirect(categoria_id ? `/productos?categoria_id=${categoria_id}` : '/productos');
   } catch (err) {
     console.error(err);
     res.render('error', { mensaje: 'Error al crear producto: ' + err.message });
@@ -107,11 +106,10 @@ router.get('/:id', async (req, res) => {
       `SELECT p.*, c.nombre as categoria_nombre 
        FROM productos p 
        LEFT JOIN categorias c ON p.categoria_id = c.id 
-       WHERE p.id = ?`,
-      [id]
+       WHERE p.id = ?`, [id]
     );
 
-    if (!productos.length) {
+    if (productos.length === 0) {
       return res.render('error', { mensaje: 'Producto no encontrado' });
     }
 
@@ -140,9 +138,7 @@ router.get('/editar/:id', requireAuth, async (req, res) => {
   const { id } = req.params;
   try {
     const [results] = await pool.query('SELECT * FROM productos WHERE id = ?', [id]);
-    if (!results.length) {
-      return res.render('error', { mensaje: 'Producto no encontrado' });
-    }
+    if (results.length === 0) return res.render('error', { mensaje: 'Producto no encontrado' });
     res.render('producto_form', { producto: results[0], accion: 'Editar', session: req.session });
   } catch (err) {
     console.error(err);
