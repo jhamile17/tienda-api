@@ -179,6 +179,42 @@ router.post('/eliminar/:id', requireAuth, async (req, res) => {
     res.render('error', { mensaje: 'Error al eliminar producto' });
   }
 });
+// ---------------------
+// Listar productos (filtrados por categoría predeterminada)
+// ---------------------
+router.get('/', async (req, res) => {
+  try {
+    // Puedes definir aquí la categoría predeterminada
+    // Por ejemplo, la categoría con id = 1
+    const categoria_predeterminada = 1;
+
+    let query = `
+      SELECT p.id, p.nombre, p.precio, p.categoria_id,
+             ip.url AS imagen_url
+      FROM productos p
+      LEFT JOIN imagenes_productos ip 
+        ON p.id = ip.producto_id
+      WHERE p.categoria_id = ?
+      GROUP BY p.id
+    `;
+    
+    const [results] = await pool.query(query, [categoria_predeterminada]);
+
+    // Obtener todas las categorías para mostrar en el header o selector
+    const [categorias] = await pool.query('SELECT * FROM categorias');
+
+    res.render('productos', { 
+      productos: results, 
+      categorias, 
+      categoria_id: categoria_predeterminada, 
+      session: req.session 
+    });
+  } catch (err) {
+    console.error(err);
+    res.render('error', { mensaje: 'Error al obtener productos' });
+  }
+});
+
 
 module.exports = router;
 
