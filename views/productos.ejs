@@ -2,46 +2,34 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <title>Productos</title>
+  <title>Lista de Productos</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
 </head>
 <body>
   <%- include('header') %>
+
   <div class="container mt-5">
-    <h2 class="mb-4">Lista de Productos</h2>
-    <% if (typeof session !== 'undefined' && session.user) { %>
-      <a href="/productos/nuevo" class="btn btn-success mb-3">Agregar Producto</a>
-    <% } %>
-    <div class="row row-cols-1 row-cols-md-3 g-4">
-      <% productos.forEach(function(producto) { %>
-        <div class="col">
-          <div class="card h-100">
+    <h2 class="mb-4">Productos</h2>
+    <div class="row">
+      <% productos.forEach(producto => { %>
+        <div class="col-md-4 mb-4">
+          <div class="card">
             <% if (producto.imagen_url) { %>
-                <img src="<%= producto.imagen_url %>" class="card-img-top" alt="<%= producto.nombre %>" style="height: 200px; object-fit: cover;">
+              <img src="<%= producto.imagen_url %>" class="card-img-top" alt="<%= producto.nombre %>">
             <% } else { %>
-                <div class="card-img-top bg-light d-flex align-items-center justify-content-center" style="height: 200px;">
-                    <span class="text-muted">Sin imagen</span>
-                </div>
+              <img src="/img/no-image.png" class="card-img-top" alt="Sin imagen">
             <% } %>
             <div class="card-body">
-              <h5 class="card-title"><a href="/productos/<%= producto.id %>" class="text-decoration-none text-dark"><%= producto.nombre %></a></h5>
-              <p class="card-text">
-                <strong>Precio:</strong> $<%= producto.precio %>
-              </p>
-              <a href="/productos/<%= producto.id %>" class="btn btn-info mb-2 w-100">Ver Detalles</a>
-              <% if (typeof session !== 'undefined' && session.user) { %>
-                <div class="d-grid gap-2">
-                  <a href="/productos/editar/<%= producto.id %>" class="btn btn-primary">Editar</a>
-                  <form action="/productos/eliminar/<%= producto.id %>" method="POST">
-                    <button type="submit" class="btn btn-danger w-100" onclick="return confirm('¿Eliminar este producto?')">Eliminar</button>
-                  </form>
-                </div>
-              <% } %>
+              <h5 class="card-title"><%= producto.nombre %></h5>
+              <p class="card-text">Precio: $<%= producto.precio %></p>
+              <a href="/productos/<%= producto.id %>" class="btn btn-primary">Ver Detalle</a>
             </div>
           </div>
         </div>
       <% }); %>
     </div>
   </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
