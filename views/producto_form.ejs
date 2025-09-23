@@ -19,8 +19,8 @@
           <input type="number" class="form-control" id="precio" name="precio" value="<%= producto.precio || '' %>" required>
         </div>
         <div class="mb-3">
-          <label for="categoria_id" class="form-label">Categoría</label>
-          <input type="number" class="form-control" id="categoria_id" name="categoria_id" value="<%= producto.categoria_id || '' %>">
+          <label for="categoria" class="form-label">Categoría</label>
+          <input type="text" class="form-control" id="categoria" name="categoria" value="<%= producto.categoria || '' %>">
         </div>
         <button type="submit" class="btn btn-success"><%= accion %></button>
         <a href="/productos" class="btn btn-secondary">Cancelar</a>
