@@ -24,7 +24,7 @@ const upload = multer({ storage });
 // ---------------------
 // Listar productos con filtro opcional por categoría
 // ---------------------
-router.get('/', async (req, res) => {
+router.get('/productos', async (req, res) => {
   try {
     const { categoria_id } = req.query; // leer categoría seleccionada
 
