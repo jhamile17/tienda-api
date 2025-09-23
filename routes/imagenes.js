@@ -58,12 +58,14 @@ router.post('/producto/:producto_id', upload.array('imagenes', 10), async (req, 
     return res.render('error', { mensaje: 'Por favor, selecciona al menos una imagen' });
   }
 
-  const values = files.map(f => ['/uploads/' + f.filename, producto_id]);
-
   try {
-    await pool.query('INSERT INTO imagenes_productos (url, producto_id) VALUES ?', [values]);
+    for (const file of files) {
+      const imageUrl = '/uploads/' + file.filename;
+      await pool.query('INSERT INTO imagenes_productos (url, producto_id) VALUES (?, ?)', [imageUrl, producto_id]);
+    }
     res.redirect(`/imagenes?producto_id=${producto_id}`);
   } catch (err) {
+    console.error(err);
     res.render('error', { mensaje: 'Error al guardar las imágenes' });
   }
 });
@@ -91,4 +93,3 @@ router.post('/eliminar/:id', async (req, res) => {
 });
 
 module.exports = router;
-
