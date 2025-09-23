@@ -11,25 +11,20 @@
   <div class="container mt-5">
     <h2 class="mb-4">Productos</h2>
 
-    <!-- Selector de categorías -->
+    <!-- Formulario de filtro por categoría -->
     <form method="get" action="/productos" class="mb-4">
-      <div class="row align-items-end">
+      <div class="row">
         <div class="col-md-4">
-          <label for="categoria_id" class="form-label">Filtrar por categoría:</label>
-          <select id="categoria_id" name="categoria_id" class="form-select">
+          <select name="categoria_id" class="form-select" onchange="this.form.submit()">
             <option value="">Todas las categorías</option>
             <% categorias.forEach(cat => { %>
               <option value="<%= cat.id %>" <%= categoria_id == cat.id ? 'selected' : '' %>><%= cat.nombre %></option>
             <% }); %>
           </select>
         </div>
-        <div class="col-md-2">
-          <button type="submit" class="btn btn-primary mt-2">Ver</button>
-        </div>
       </div>
     </form>
 
-    <!-- Lista de productos -->
     <div class="row">
       <% productos.forEach(producto => { %>
         <div class="col-md-4 mb-4">
