@@ -35,10 +35,17 @@ router.get('/', async (req, res) => {
   try {
     const [results] = await pool.query(`
       SELECT p.id, p.nombre, p.precio, p.categoria_id,
-             MAX(i.url) AS imagen_url
+             i.url AS imagen_url
       FROM productos p
-      LEFT JOIN imagenes_productos i ON p.id = i.producto_id
-      GROUP BY p.id
+      LEFT JOIN (
+        SELECT ip.producto_id, ip.url
+        FROM imagenes_productos ip
+        INNER JOIN (
+          SELECT producto_id, MAX(id) AS max_id
+          FROM imagenes_productos
+          GROUP BY producto_id
+        ) t ON ip.producto_id = t.producto_id AND ip.id = t.max_id
+      ) i ON p.id = i.producto_id
     `);
 
     res.render('productos', { productos: results, session: req.session });
