@@ -10,6 +10,21 @@
 
   <div class="container mt-5">
     <h2 class="mb-4">Productos</h2>
+
+    <!-- Selector de categorías -->
+    <form method="get" action="/productos" class="mb-4">
+      <div class="row">
+        <div class="col-md-4">
+          <select name="categoria_id" class="form-select" onchange="this.form.submit()">
+            <option value="">Todas las categorías</option>
+            <% categorias.forEach(cat => { %>
+              <option value="<%= cat.id %>" <%= categoria_id == cat.id ? 'selected' : '' %>><%= cat.nombre %></option>
+            <% }); %>
+          </select>
+        </div>
+      </div>
+    </form>
+
     <div class="row">
       <% productos.forEach(producto => { %>
         <div class="col-md-4 mb-4">
