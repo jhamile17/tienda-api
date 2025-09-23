@@ -11,7 +11,7 @@
   <div class="container mt-5">
     <h2 class="mb-4">Productos</h2>
 
-    <!-- Filtro por categoría -->
+    <!-- Selector de categorías -->
     <form method="get" action="/productos" class="mb-4">
       <div class="row">
         <div class="col-md-4">
@@ -25,24 +25,28 @@
       </div>
     </form>
 
-    <!-- Lista de productos -->
+    <!-- Lista de productos filtrados -->
     <div class="row">
-      <% productos.forEach(producto => { %>
-        <div class="col-md-4 mb-4">
-          <div class="card">
-            <% if (producto.imagen_url) { %>
-              <img src="<%= producto.imagen_url %>" class="card-img-top" alt="<%= producto.nombre %>">
-            <% } else { %>
-              <img src="/img/no-image.png" class="card-img-top" alt="Sin imagen">
-            <% } %>
-            <div class="card-body">
-              <h5 class="card-title"><%= producto.nombre %></h5>
-              <p class="card-text">Precio: $<%= producto.precio %></p>
-              <a href="/productos/<%= producto.id %>" class="btn btn-primary">Ver Detalle</a>
+      <% if (productos.length === 0) { %>
+        <p>No hay productos en esta categoría.</p>
+      <% } else { %>
+        <% productos.forEach(producto => { %>
+          <div class="col-md-4 mb-4">
+            <div class="card">
+              <% if (producto.imagen_url) { %>
+                <img src="<%= producto.imagen_url %>" class="card-img-top" alt="<%= producto.nombre %>">
+              <% } else { %>
+                <img src="/img/no-image.png" class="card-img-top" alt="Sin imagen">
+              <% } %>
+              <div class="card-body">
+                <h5 class="card-title"><%= producto.nombre %></h5>
+                <p class="card-text">Precio: $<%= producto.precio %></p>
+                <a href="/productos/<%= producto.id %>" class="btn btn-primary">Ver Detalle</a>
+              </div>
             </div>
           </div>
-        </div>
-      <% }); %>
+        <% }); %>
+      <% } %>
     </div>
   </div>
 
