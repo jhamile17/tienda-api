@@ -11,7 +11,7 @@ function requireAuth(req, res, next) {
   res.status(403).render('error', { mensaje: 'Acceso denegado. Inicia sesión.' });
 }
 
-// Configuración Multer
+// Configuración Multer para subir imágenes
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, 'public/uploads'),
   filename: (req, file, cb) => cb(null, Date.now() + path.extname(file.originalname))
@@ -19,28 +19,56 @@ const storage = multer.diskStorage({
 const upload = multer({ storage });
 
 // ---------------------
-// Listar productos (filtro opcional por nombre de categoría)
+// Listar productos con filtros
 // ---------------------
 router.get('/', async (req, res) => {
   try {
-    const { categoria } = req.query;
+    const { nombre, precio_min, precio_max, categoria } = req.query;
+
     let query = `
       SELECT p.id, p.nombre, p.precio, c.nombre AS categoria, ip.url AS imagen_url
       FROM productos p
       LEFT JOIN categorias c ON p.categoria_id = c.id
       LEFT JOIN imagenes_productos ip ON p.id = ip.producto_id
+      WHERE 1=1
     `;
     const params = [];
+
+    if (nombre) {
+      query += ' AND p.nombre LIKE ?';
+      params.push(`%${nombre}%`);
+    }
+
+    if (precio_min) {
+      query += ' AND p.precio >= ?';
+      params.push(precio_min);
+    }
+
+    if (precio_max) {
+      query += ' AND p.precio <= ?';
+      params.push(precio_max);
+    }
+
     if (categoria) {
-      query += ' WHERE c.nombre = ?';
+      query += ' AND c.nombre = ?';
       params.push(categoria);
     }
+
     query += ' GROUP BY p.id';
 
     const [productos] = await pool.query(query, params);
     const [categorias] = await pool.query('SELECT nombre FROM categorias');
 
-    res.render('productos', { productos, categorias, categoria: categoria || '', session: req.session });
+    res.render('productos', {
+      productos,
+      categorias,
+      nombre: nombre || '',
+      precio_min: precio_min || '',
+      precio_max: precio_max || '',
+      categoria: categoria || '',
+      session: req.session
+    });
+
   } catch (err) {
     console.error(err);
     res.render('error', { mensaje: 'Error al obtener productos' });
@@ -48,7 +76,7 @@ router.get('/', async (req, res) => {
 });
 
 // ---------------------
-// Mostrar formulario nuevo
+// Formulario nuevo producto
 // ---------------------
 router.get('/nuevo', requireAuth, async (req, res) => {
   try {
@@ -95,9 +123,9 @@ router.get('/:id', async (req, res) => {
   const { id } = req.params;
   try {
     const [productos] = await pool.query(
-      `SELECT p.*, c.nombre as categoria_nombre 
-       FROM productos p 
-       LEFT JOIN categorias c ON p.categoria_id = c.id 
+      `SELECT p.*, c.nombre AS categoria_nombre
+       FROM productos p
+       LEFT JOIN categorias c ON p.categoria_id = c.id
        WHERE p.id = ?`, [id]
     );
 
@@ -119,7 +147,7 @@ router.get('/:id', async (req, res) => {
 });
 
 // ---------------------
-// Mostrar formulario editar
+// Formulario editar producto
 // ---------------------
 router.get('/editar/:id', requireAuth, async (req, res) => {
   const { id } = req.params;
@@ -140,7 +168,7 @@ router.get('/editar/:id', requireAuth, async (req, res) => {
 });
 
 // ---------------------
-// Actualizar producto (+ imagen opcional)
+// Actualizar producto
 // ---------------------
 router.post('/editar/:id', requireAuth, upload.single('imagen'), async (req, res) => {
   const { id } = req.params;
@@ -151,7 +179,10 @@ router.post('/editar/:id', requireAuth, upload.single('imagen'), async (req, res
     if (catResults.length === 0) return res.render('error', { mensaje: 'Categoría no válida' });
     const categoria_id = catResults[0].id;
 
-    await pool.query('UPDATE productos SET nombre = ?, precio = ?, categoria_id = ? WHERE id = ?', [nombre, precio, categoria_id, id]);
+    await pool.query(
+      'UPDATE productos SET nombre = ?, precio = ?, categoria_id = ? WHERE id = ?',
+      [nombre, precio, categoria_id, id]
+    );
 
     if (req.file) {
       const imageUrl = '/uploads/' + req.file.filename;
@@ -171,7 +202,6 @@ router.post('/editar/:id', requireAuth, upload.single('imagen'), async (req, res
 router.post('/eliminar/:id', requireAuth, async (req, res) => {
   const { id } = req.params;
   try {
-    // Borrar imágenes físicas
     const [imagenes] = await pool.query('SELECT * FROM imagenes_productos WHERE producto_id = ?', [id]);
     for (let img of imagenes) {
       const imagePath = path.join('public', img.url);
