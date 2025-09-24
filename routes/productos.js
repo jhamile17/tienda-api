@@ -54,10 +54,10 @@ router.get('/', async (req, res) => {
       params.push(categoria);
     }
 
-    query += ' GROUP BY p.id';
+    query += ' GROUP BY p.id ORDER BY p.id DESC';
 
     const [productos] = await pool.query(query, params);
-    const [categorias] = await pool.query('SELECT nombre FROM categorias');
+    const [categorias] = await pool.query('SELECT nombre FROM categorias ORDER BY nombre ASC');
 
     res.render('productos', {
       productos,
@@ -80,8 +80,24 @@ router.get('/', async (req, res) => {
 // ---------------------
 router.get('/nuevo', requireAuth, async (req, res) => {
   try {
-    const [categorias] = await pool.query('SELECT nombre FROM categorias');
-    res.render('producto_form', { producto: {}, categorias, accion: 'Crear', session: req.session });
+    const [categorias] = await pool.query('SELECT id, nombre FROM categorias ORDER BY nombre ASC');
+    const categoria_id = req.query.categoria_id;
+    let producto = {};
+    
+    if (categoria_id) {
+      const [catResult] = await pool.query('SELECT id, nombre FROM categorias WHERE id = ?', [categoria_id]);
+      if (catResult.length > 0) {
+        producto.categoria_id = catResult[0].id;
+        producto.categoria = catResult[0].nombre;
+      }
+    }
+    
+    res.render('producto_form', { 
+      producto, 
+      categorias, 
+      accion: 'Crear', 
+      session: req.session 
+    });
   } catch (err) {
     console.error(err);
     res.render('error', { mensaje: 'Error al cargar formulario' });
@@ -95,24 +111,50 @@ router.post('/nuevo', requireAuth, upload.single('imagen'), async (req, res) => 
   try {
     const { nombre, precio, categoria } = req.body;
 
+    // Validaciones
+    if (!nombre || !precio || !categoria) {
+      return res.render('error', { 
+        mensaje: 'Todos los campos son obligatorios',
+        session: req.session
+      });
+    }
+
+    // Buscar la categoría por nombre
     const [catResults] = await pool.query('SELECT id FROM categorias WHERE nombre = ?', [categoria]);
-    if (catResults.length === 0) return res.render('error', { mensaje: 'Categoría no válida' });
+    if (catResults.length === 0) {
+      return res.render('error', { 
+        mensaje: 'La categoría seleccionada no es válida',
+        session: req.session
+      });
+    }
     const categoria_id = catResults[0].id;
 
+    // Crear el producto
     const [result] = await pool.query(
       'INSERT INTO productos (nombre, precio, categoria_id) VALUES (?, ?, ?)',
       [nombre, precio, categoria_id]
     );
 
+    // Manejar la imagen si se proporcionó una
     if (req.file) {
       const imageUrl = '/uploads/' + req.file.filename;
-      await pool.query('INSERT INTO imagenes_productos (producto_id, url) VALUES (?, ?)', [result.insertId, imageUrl]);
+      await pool.query(
+        'INSERT INTO imagenes_productos (producto_id, url) VALUES (?, ?)',
+        [result.insertId, imageUrl]
+      );
     }
 
     res.redirect('/productos');
   } catch (err) {
     console.error(err);
-    res.render('error', { mensaje: 'Error al crear producto: ' + err.message });
+    const [categorias] = await pool.query('SELECT id, nombre FROM categorias ORDER BY nombre ASC');
+    res.render('producto_form', {
+      producto: req.body,
+      categorias,
+      accion: 'Crear',
+      error: 'Error al crear el producto: ' + err.message,
+      session: req.session
+    });
   }
 });
 
@@ -171,28 +213,69 @@ router.get('/editar/:id', requireAuth, async (req, res) => {
 // Actualizar producto
 // ---------------------
 router.post('/editar/:id', requireAuth, upload.single('imagen'), async (req, res) => {
-  const { id } = req.params;
-  const { nombre, precio, categoria } = req.body;
-
   try {
-    const [catResults] = await pool.query('SELECT id FROM categorias WHERE nombre = ?', [categoria]);
-    if (catResults.length === 0) return res.render('error', { mensaje: 'Categoría no válida' });
-    const categoria_id = catResults[0].id;
+    const { nombre, precio, categoria } = req.body;
+    const productoId = req.params.id;
 
-    await pool.query(
-      'UPDATE productos SET nombre = ?, precio = ?, categoria_id = ? WHERE id = ?',
-      [nombre, precio, categoria_id, id]
-    );
-
-    if (req.file) {
-      const imageUrl = '/uploads/' + req.file.filename;
-      await pool.query('INSERT INTO imagenes_productos (producto_id, url) VALUES (?, ?)', [id, imageUrl]);
+    // Validaciones
+    if (!nombre || !precio || !categoria) {
+      return res.render('error', { 
+        mensaje: 'Todos los campos son obligatorios',
+        session: req.session
+      });
     }
 
-    res.redirect(`/productos/${id}`);
+    // Verificar que el producto existe
+    const [prodExists] = await pool.query('SELECT id FROM productos WHERE id = ?', [productoId]);
+    if (prodExists.length === 0) {
+      return res.render('error', { 
+        mensaje: 'El producto no existe',
+        session: req.session
+      });
+    }
+
+    // Buscar la categoría por nombre
+    const [catResults] = await pool.query('SELECT id FROM categorias WHERE nombre = ?', [categoria]);
+    if (catResults.length === 0) {
+      return res.render('error', { 
+        mensaje: 'La categoría seleccionada no es válida',
+        session: req.session
+      });
+    }
+    const categoria_id = catResults[0].id;
+
+    // Actualizar el producto
+    await pool.query(
+      'UPDATE productos SET nombre = ?, precio = ?, categoria_id = ? WHERE id = ?',
+      [nombre, precio, categoria_id, productoId]
+    );
+
+    // Manejar la imagen si se proporcionó una
+    if (req.file) {
+      const imageUrl = '/uploads/' + req.file.filename;
+      await pool.query(
+        'INSERT INTO imagenes_productos (producto_id, url) VALUES (?, ?)',
+        [productoId, imageUrl]
+      );
+    }
+
+    res.redirect('/productos');
   } catch (err) {
     console.error(err);
-    res.render('error', { mensaje: 'Error al actualizar producto' });
+    const [categorias] = await pool.query('SELECT id, nombre FROM categorias ORDER BY nombre ASC');
+    const [producto] = await pool.query(
+      'SELECT p.*, c.nombre as categoria FROM productos p ' +
+      'LEFT JOIN categorias c ON p.categoria_id = c.id ' +
+      'WHERE p.id = ?',
+      [req.params.id]
+    );
+    res.render('producto_form', {
+      producto: producto[0],
+      categorias,
+      accion: 'Editar',
+      error: 'Error al actualizar el producto: ' + err.message,
+      session: req.session
+    });
   }
 });
 
