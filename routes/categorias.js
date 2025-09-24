@@ -76,18 +76,41 @@ router.post('/eliminar/:id', async (req, res) => {
 router.get('/:id/productos', async (req, res) => {
 	const { id } = req.params;
 	try {
+		// Obtener información de la categoría
 		const [catResults] = await pool.query('SELECT * FROM categorias WHERE id = ?', [id]);
-		if (catResults.length === 0) return res.render('error', { mensaje: 'Categoría no encontrada' });
+		if (catResults.length === 0) {
+			return res.render('error', { 
+				mensaje: 'Categoría no encontrada',
+				session: req.session
+			});
+		}
 
 		const categoria = catResults[0];
-		const [prodResults] = await pool.query('SELECT * FROM productos WHERE categoria_id = ?', [id]);
 
-		res.render('productos_categoria', { categoria, productos: prodResults, session: req.session });
+		// Obtener productos con sus imágenes
+		const [prodResults] = await pool.query(`
+			SELECT p.*, 
+				   (SELECT ip.url 
+					FROM imagenes_productos ip 
+					WHERE ip.producto_id = p.id 
+					LIMIT 1) as imagen_url
+			FROM productos p
+			WHERE p.categoria_id = ?
+			ORDER BY p.id DESC
+		`, [id]);
+
+		res.render('productos_categoria', { 
+			categoria, 
+			productos: prodResults, 
+			session: req.session 
+		});
 	} catch (err) {
-		console.error(err);
-		res.render('error', { mensaje: 'Error al obtener productos de la categoría' });
+		console.error('Error al obtener productos de la categoría:', err);
+		res.render('error', { 
+			mensaje: 'Error al obtener productos de la categoría',
+			session: req.session
+		});
 	}
 });
 
 module.exports = router;
-
