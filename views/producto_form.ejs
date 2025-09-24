@@ -2,44 +2,83 @@
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <title>Nuevo Producto</title>
+  <title><%= accion %> Producto</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
 </head>
 <body>
+  <%- include('partials/header') %>
   <div class="container mt-5">
-    <h2>Nuevo Producto</h2>
+    <div class="row justify-content-center">
+      <div class="col-md-8">
+        <div class="card">
+          <div class="card-body">
+            <h2 class="card-title mb-4"><%= accion %> Producto</h2>
 
-    <% if (typeof session !== 'undefined' && session.user) { %>
-      <form method="POST" action="/productos/nuevo">
-        <!-- Nombre -->
-        <div class="mb-3">
-          <label for="nombre" class="form-label">Nombre</label>
-          <input type="text" class="form-control" id="nombre" name="nombre" value="<%= producto?.nombre || '' %>" required>
+            <% if (typeof session !== 'undefined' && session.user) { %>
+              <form method="POST" action="/productos/<%= accion === 'Crear' ? 'nuevo' : 'editar/' + producto.id %>" enctype="multipart/form-data">
+                <!-- Nombre -->
+                <div class="mb-3">
+                  <label for="nombre" class="form-label">Nombre del Producto</label>
+                  <input type="text" class="form-control" id="nombre" name="nombre" 
+                         value="<%= producto?.nombre || '' %>" required
+                         placeholder="Ingrese el nombre del producto">
+                </div>
+
+                <!-- Precio -->
+                <div class="mb-3">
+                  <label for="precio" class="form-label">Precio</label>
+                  <div class="input-group">
+                    <span class="input-group-text">$</span>
+                    <input type="number" class="form-control" id="precio" name="precio" 
+                           value="<%= producto?.precio || '' %>" required
+                           step="0.01" min="0" placeholder="0.00">
+                  </div>
+                </div>
+
+                <!-- Categoría -->
+                <div class="mb-3">
+                  <label for="categoria" class="form-label">Categoría</label>
+                  <select class="form-select" id="categoria" name="categoria" required>
+                    <option value="">Seleccione una categoría</option>
+                    <% categorias.forEach(cat => { %>
+                      <option value="<%= cat.nombre %>" 
+                              <%= (producto?.categoria === cat.nombre || 
+                                  producto?.categoria_id === cat.id) ? 'selected' : '' %>>
+                        <%= cat.nombre %>
+                      </option>
+                    <% }) %>
+                  </select>
+                </div>
+
+                <!-- Imagen -->
+                <div class="mb-3">
+                  <label for="imagen" class="form-label">Imagen del Producto</label>
+                  <input type="file" class="form-control" id="imagen" name="imagen" 
+                         accept="image/*">
+                  <div class="form-text">Formatos aceptados: JPG, PNG, GIF</div>
+                </div>
+
+                <!-- Botones -->
+                <div class="d-flex gap-2">
+                  <button type="submit" class="btn btn-success flex-grow-1">
+                    <%= accion === 'Crear' ? 'Crear Producto' : 'Guardar Cambios' %>
+                  </button>
+                  <a href="/productos" class="btn btn-secondary flex-grow-1">Cancelar</a>
+                </div>
+              </form>
+            <% } else { %>
+              <div class="alert alert-info">
+                <i class="bi bi-info-circle me-2"></i>
+                Debes iniciar sesión para <%= accion.toLowerCase() %> un producto.
+              </div>
+              <a href="/login" class="btn btn-primary">Iniciar Sesión</a>
+            <% } %>
+          </div>
         </div>
-
-        <!-- Precio -->
-        <div class="mb-3">
-          <label for="precio" class="form-label">Precio</label>
-          <input type="number" class="form-control" id="precio" name="precio" value="<%= producto?.precio || '' %>" required>
-        </div>
-
-        <!-- Categoría (select con nombres) -->
-        <div class="mb-3">
-          <label for="categoria" class="form-label">Categoría</label>
-          <select class="form-control" id="categoria" name="categoria" required>
-            <% categorias.forEach(cat => { %>
-              <option value="<%= cat.nombre %>"><%= cat.nombre %></option>
-            <% }) %>
-          </select>
-        </div>
-
-        <!-- Botones -->
-        <button type="submit" class="btn btn-success">Crear</button>
-        <a href="/productos" class="btn btn-secondary">Cancelar</a>
-      </form>
-    <% } else { %>
-      <div class="alert alert-info">Debes iniciar sesión para crear un producto.</div>
-    <% } %>
+      </div>
+    </div>
   </div>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.7.2/font/bootstrap-icons.css"></script>
 </body>
 </html>
