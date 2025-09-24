@@ -25,15 +25,17 @@ router.get('/', async (req, res) => {
   try {
     const { nombre, precio_min, precio_max, categoria } = req.query;
 
+    // Consulta base para obtener productos con sus relaciones
     let query = `
-      SELECT p.id, p.nombre, p.precio, c.nombre AS categoria, ip.url AS imagen_url
+      SELECT DISTINCT p.id, p.nombre, p.precio, c.nombre AS categoria, 
+             (SELECT ip.url FROM imagenes_productos ip WHERE ip.producto_id = p.id LIMIT 1) AS imagen_url
       FROM productos p
       LEFT JOIN categorias c ON p.categoria_id = c.id
-      LEFT JOIN imagenes_productos ip ON p.id = ip.producto_id
       WHERE 1=1
     `;
     const params = [];
 
+    // Aplicar filtros si se proporcionan
     if (nombre) {
       query += ' AND p.nombre LIKE ?';
       params.push(`%${nombre}%`);
@@ -41,12 +43,12 @@ router.get('/', async (req, res) => {
 
     if (precio_min) {
       query += ' AND p.precio >= ?';
-      params.push(precio_min);
+      params.push(parseFloat(precio_min));
     }
 
     if (precio_max) {
       query += ' AND p.precio <= ?';
-      params.push(precio_max);
+      params.push(parseFloat(precio_max));
     }
 
     if (categoria) {
@@ -54,11 +56,14 @@ router.get('/', async (req, res) => {
       params.push(categoria);
     }
 
-    query += ' GROUP BY p.id ORDER BY p.id DESC';
+    // Ordenar productos por ID descendente
+    query += ' ORDER BY p.id DESC';
 
+    // Ejecutar consultas
     const [productos] = await pool.query(query, params);
     const [categorias] = await pool.query('SELECT nombre FROM categorias ORDER BY nombre ASC');
 
+    // Renderizar vista con resultados
     res.render('productos', {
       productos,
       categorias,
@@ -70,8 +75,11 @@ router.get('/', async (req, res) => {
     });
 
   } catch (err) {
-    console.error(err);
-    res.render('error', { mensaje: 'Error al obtener productos' });
+    console.error('Error al obtener productos:', err);
+    res.render('error', { 
+      mensaje: 'Error al obtener productos',
+      session: req.session
+    });
   }
 });
 
